@@ -1,5 +1,5 @@
 import random
-from .operators import prod
+from .operators import prod, sum, zipWith, mul
 from numpy import array, float64, ndarray
 import numba
 
@@ -23,8 +23,7 @@ def index_to_position(index, strides):
     Returns:
         int : position in storage
     """
-
-    raise NotImplementedError('Need to include this file from past assignment.')
+    return sum(zipWith(mul)(index, strides))
 
 
 def to_index(ordinal, shape, out_index):
@@ -43,7 +42,9 @@ def to_index(ordinal, shape, out_index):
       None : Fills in `out_index`.
 
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+    for i, s in enumerate(reversed(shape)):
+        out_index[len(shape) - i - 1] = ordinal % s
+        ordinal //= s
 
 
 def broadcast_index(big_index, big_shape, shape, out_index):
@@ -63,7 +64,13 @@ def broadcast_index(big_index, big_shape, shape, out_index):
     Returns:
         None : Fills in `out_index`.
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+    for i in range(1, len(big_shape) + 1):
+        if i > len(shape):
+            continue
+        if big_shape[-i] == shape[-i]:
+            out_index[-i] = big_index[-i]
+        if shape[-i] == 1:
+            out_index[-i] = 0
 
 
 def shape_broadcast(shape1, shape2):
@@ -80,7 +87,17 @@ def shape_broadcast(shape1, shape2):
     Raises:
         IndexingError : if cannot broadcast
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+    out_shape = []
+    for i in range(1, max(len(shape1), len(shape2)) + 1):
+        s1 = shape1[-i] if i <= len(shape1) else 0
+        s2 = shape2[-i] if i <= len(shape2) else 0
+        if (s1 != s2) and (s1 > 1 and s2 > 1):
+            raise IndexingError(
+                f"Cannot broadcast, because tensors don't match at trailing dimension number {i}: {s1} != {s2}"
+            )
+        out_shape.append(max(s1, s2))
+
+    return tuple(reversed(out_shape))
 
 
 def strides_from_shape(shape):
@@ -186,8 +203,10 @@ class TensorData:
         assert list(sorted(order)) == list(
             range(len(self.shape))
         ), f"Must give a position to each dimension. Shape: {self.shape} Order: {order}"
-
-        raise NotImplementedError('Need to include this file from past assignment.')
+        arr_order = array(order)
+        shape = tuple(self._shape[arr_order])
+        stride = tuple(self._strides[arr_order])
+        return TensorData(self._storage, shape, stride)
 
     def to_string(self):
         s = ""

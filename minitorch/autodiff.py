@@ -1,4 +1,5 @@
 variable_count = 1
+import collections
 
 
 # ## Module 1
@@ -56,7 +57,7 @@ class Variable:
         """
         if d_output is None:
             d_output = 1.0
-        backpropagate(self, d_output)
+        backpropagate(self, self.expand(d_output))
 
     @property
     def derivative(self):
@@ -190,7 +191,7 @@ class History:
         Returns:
             list of numbers : a derivative with respect to `inputs`
         """
-        raise NotImplementedError('Need to include this file from past assignment.')
+        return self.last_fn.chain_rule(self.ctx, self.inputs, d_output)
 
 
 class FunctionBase:
@@ -272,7 +273,11 @@ class FunctionBase:
         """
         # Tip: Note when implementing this function that
         # cls.backward may return either a value or a tuple.
-        raise NotImplementedError('Need to include this file from past assignment.')
+        return [
+            (inputs[i], inputs[i].expand(derivative))
+            for i, derivative in enumerate(wrap_tuple(cls.backward(ctx, d_output)))
+            if not is_constant(inputs[i])
+        ]
 
 
 # Algorithms for backpropagation
@@ -293,7 +298,19 @@ def topological_sort(variable):
         list of Variables : Non-constant Variables in topological order
                             starting from the right.
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+    topo_vars = []
+    visited = set()
+
+    def visit(var):
+        if not is_constant(var) and var.unique_id not in visited:
+            visited.add(var.unique_id)
+            if var.history and var.history.inputs:
+                for child in var.history.inputs:
+                    visit(child)
+            topo_vars.append(var)
+
+    visit(variable)
+    return topo_vars
 
 
 def backpropagate(variable, deriv):
@@ -309,4 +326,15 @@ def backpropagate(variable, deriv):
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    raise NotImplementedError('Need to include this file from past assignment.')
+    var_order = topological_sort(variable)
+    var_dict = collections.defaultdict(int)
+    var_dict[variable.unique_id] = deriv
+    while var_order:
+        var = var_order.pop()
+        deriv = var_dict[var.unique_id]
+        if var.is_leaf():
+            var.accumulate_derivative(deriv)
+        else:
+            derivs = var.history.backprop_step(deriv)
+            for v, d in derivs:
+                var_dict[v.unique_id] += d
